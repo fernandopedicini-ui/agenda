@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, configurada } from "./supabase";
 
-/* ---------- utilidades de fecha ---------- */
+/* ---------- fechas ---------- */
 
 const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const MESES = [
@@ -30,59 +30,42 @@ function diasEntre(a, b) {
   return Math.round((desdeISO(b) - desdeISO(a)) / 86400000);
 }
 
-function tituloDia(iso) {
-  const hoy = aISO(new Date());
-  if (iso === hoy) return "Hoy";
-  if (iso === correr(hoy, 1)) return "Mañana";
-  if (iso === correr(hoy, -1)) return "Ayer";
+// Etiqueta corta de vencimiento, la que va a la izquierda de cada tarea.
+function cuando(iso, hoy) {
+  if (iso === hoy) return "hoy";
+  if (iso === correr(hoy, 1)) return "mañana";
+  const dif = diasEntre(hoy, iso);
+  if (dif > 1 && dif < 7) return DIAS[desdeISO(iso).getDay()].slice(0, 3);
   const d = desdeISO(iso);
-  return DIAS[d.getDay()];
+  return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-function subtituloDia(iso) {
-  const d = desdeISO(iso);
-  return `${d.getDate()} de ${MESES[d.getMonth()]}`;
-}
-
-function deDondeViene(iso, hasta) {
-  const dif = diasEntre(iso, hasta);
-  if (dif === 1) return "viene de ayer";
-  if (dif < 7) return `viene del ${DIAS[desdeISO(iso).getDay()]}`;
-  const d = desdeISO(iso);
-  return `viene del ${d.getDate()}/${d.getMonth() + 1}`;
-}
-
-function pasoLaHora(t) {
-  if (t.estado === "lista" || !t.hora) return false;
-  const ahora = new Date();
-  if (t.fecha !== aISO(ahora)) return false;
-  const reloj = `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
-  return t.hora < reloj;
+function atraso(iso, hoy) {
+  const dif = diasEntre(iso, hoy);
+  if (dif === 1) return "venció ayer";
+  if (dif < 7) return `venció el ${DIAS[desdeISO(iso).getDay()]}`;
+  return `${dif} días de atraso`;
 }
 
 /* ---------- app ---------- */
 
 export default function App() {
   const [yo, setYo] = useState(() => localStorage.getItem("yo") || "");
-  const [fecha, setFecha] = useState(() => aISO(new Date()));
+  const [hoy, setHoy] = useState(() => aISO(new Date()));
   const [filtro, setFiltro] = useState("todo");
   const [tareas, setTareas] = useState([]);
   const [equipo, setEquipo] = useState([]);
   const [error, setError] = useState("");
   const [panel, setPanel] = useState(null);
 
-  // Hoy y días pasados: se arrastra todo lo pendiente hasta esa fecha.
-  // Días futuros: solo lo agendado para ese día, para no repetir lo mismo en cada pantalla.
-  // En los dos casos se suma lo que se entregó ese mismo día, y nada más.
+  // Todo lo que está pendiente, sin importar para qué día vence,
+  // más lo que se entregó hoy (que se ve tachado hasta que termine el día).
   const cargar = useCallback(async () => {
     if (!supabase) return;
-    const futuro = fecha > aISO(new Date());
-    const pendientes = `and(estado.eq.pendiente,fecha.${futuro ? "eq" : "lte"}.${fecha})`;
+    const ahora = aISO(new Date());
+    setHoy(ahora);
     const [t, e] = await Promise.all([
-      supabase
-        .from("tareas")
-        .select("*")
-        .or(`${pendientes},entregada_en.eq.${fecha}`),
+      supabase.from("tareas").select("*").or(`estado.eq.pendiente,entregada_en.eq.${ahora}`),
       supabase.from("equipo").select("*").order("nombre"),
     ]);
     if (t.error || e.error) {
@@ -92,7 +75,7 @@ export default function App() {
     setError("");
     setTareas(t.data || []);
     setEquipo(e.data || []);
-  }, [fecha]);
+  }, []);
 
   useEffect(() => {
     cargar();
@@ -106,9 +89,12 @@ export default function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "equipo" }, cargar)
       .subscribe();
     const reloj = setInterval(cargar, 60000);
+    const alVolver = () => document.visibilityState === "visible" && cargar();
+    document.addEventListener("visibilitychange", alVolver);
     return () => {
       supabase.removeChannel(canal);
       clearInterval(reloj);
+      document.removeEventListener("visibilitychange", alVolver);
     };
   }, [cargar]);
 
@@ -118,22 +104,21 @@ export default function App() {
 
   const visibles = useMemo(() => {
     const base = filtro === "mio" && yo ? tareas.filter((t) => t.responsable === yo) : tareas;
-    const rango = (t) => (t.estado === "lista" ? 2 : t.fecha < fecha ? 0 : 1);
     return [...base].sort((a, b) => {
-      const ra = rango(a);
-      const rb = rango(b);
-      if (ra !== rb) return ra - rb;
-      if (ra === 0 && a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+      const ha = a.estado === "lista" ? 1 : 0;
+      const hb = b.estado === "lista" ? 1 : 0;
+      if (ha !== hb) return ha - hb;
+      if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
       if (!a.hora && !b.hora) return a.titulo.localeCompare(b.titulo);
       if (!a.hora) return 1;
       if (!b.hora) return -1;
       return a.hora.localeCompare(b.hora);
     });
-  }, [tareas, filtro, yo, fecha]);
+  }, [tareas, filtro, yo]);
 
   const abiertas = visibles.filter((t) => t.estado !== "lista").length;
   const entregadas = visibles.filter((t) => t.estado === "lista").length;
-  const colgadas = visibles.filter((t) => t.estado !== "lista" && t.fecha < fecha).length;
+  const atrasadas = visibles.filter((t) => t.estado !== "lista" && t.fecha < hoy).length;
 
   async function guardarTarea(datos) {
     const { error } = await supabase.from("tareas").insert(datos);
@@ -184,12 +169,13 @@ export default function App() {
         <div className="aviso">
           <strong>Falta conectar la base</strong>
           Cargá las variables <code>VITE_SUPABASE_URL</code> y <code>VITE_SUPABASE_ANON_KEY</code> en
-          Vercel, en Settings → Environment Variables, y volvé a publicar. Está todo explicado en el
-          instructivo.
+          Vercel, en Settings → Environment Variables, y volvé a publicar.
         </div>
       </div>
     );
   }
+
+  const d = desdeISO(hoy);
 
   return (
     <div className="app">
@@ -209,33 +195,24 @@ export default function App() {
       </div>
 
       <div className="dia">
-        <h1>{tituloDia(fecha)}</h1>
-        <span className="fecha">{subtituloDia(fecha)}</span>
+        <h1>Pendientes</h1>
+        <span className="fecha">
+          {DIAS[d.getDay()]} {d.getDate()} de {MESES[d.getMonth()]}
+        </span>
       </div>
       <p className="resumen">
-        {visibles.length === 0 ? (
-          "Nada pendiente"
+        {abiertas === 0 && entregadas === 0 ? (
+          "No hay nada cargado"
         ) : (
           <>
             <b>{abiertas}</b> por entregar
-            {entregadas > 0 && <> · {entregadas} listas</>}
-            {colgadas > 0 && <span className="vencidas"> · {colgadas} de días anteriores</span>}
+            {atrasadas > 0 && <span className="vencidas"> · {atrasadas} atrasadas</span>}
+            {entregadas > 0 && <> · {entregadas} entregadas hoy</>}
           </>
         )}
       </p>
 
       <div className="controles">
-        <div className="nav">
-          <button onClick={() => setFecha(correr(fecha, -1))} aria-label="Día anterior">
-            ‹
-          </button>
-          <button onClick={() => setFecha(aISO(new Date()))} aria-label="Volver a hoy">
-            ●
-          </button>
-          <button onClick={() => setFecha(correr(fecha, 1))} aria-label="Día siguiente">
-            ›
-          </button>
-        </div>
         <div className="filtros">
           <button
             className={`filtro ${filtro === "todo" ? "activo" : ""}`}
@@ -256,23 +233,18 @@ export default function App() {
 
       {visibles.length === 0 ? (
         <div className="vacio">
-          <strong>{filtro === "mio" ? "No tenés nada acá" : "Día limpio"}</strong>
-          {filtro === "mio"
-            ? "Ninguna tarea tuya sin entregar."
-            : "Cargá la primera tarea del día."}
+          <strong>{filtro === "mio" ? "No tenés nada pendiente" : "Todo al día"}</strong>
+          {filtro === "mio" ? "Ninguna tarea tuya sin entregar." : "Cargá la primera tarea."}
         </div>
       ) : (
         <div className="lista">
           {visibles.map((t) => {
             const hecha = t.estado === "lista";
-            const vieja = !hecha && t.fecha < fecha;
-            const tarde = pasoLaHora(t);
+            const tarde = !hecha && t.fecha < hoy;
             return (
               <div key={t.id} className={`fila ${hecha ? "hecha" : ""}`}>
-                <span className={`punto ${vieja || tarde ? "tarde" : hecha ? "lista" : "pendiente"}`} />
-                <span className={`hora ${tarde ? "tarde" : ""} ${t.hora ? "" : "libre"}`}>
-                  {t.hora || "s/h"}
-                </span>
+                <span className={`punto ${tarde ? "tarde" : hecha ? "lista" : "pendiente"}`} />
+                <span className={`hora ${tarde ? "tarde" : ""}`}>{cuando(t.fecha, hoy)}</span>
                 <button className="cuerpo" onClick={() => setPanel({ tipo: "tarea", tarea: t })}>
                   <span className="titulo">{t.titulo}</span>
                   <span className="meta">
@@ -285,8 +257,13 @@ export default function App() {
                         {t.cliente}
                       </>
                     )}
-                    {vieja && <span className="etiqueta">{deDondeViene(t.fecha, fecha)}</span>}
-                    {tarde && <span className="etiqueta">pasó la hora</span>}
+                    {t.hora && !hecha && (
+                      <>
+                        <span className="sep">/</span>
+                        {t.hora}
+                      </>
+                    )}
+                    {tarde && <span className="etiqueta">{atraso(t.fecha, hoy)}</span>}
                   </span>
                 </button>
                 <button
@@ -320,9 +297,9 @@ export default function App() {
                 <FormaTarea
                   equipo={equipo}
                   yo={yo}
-                  fecha={fecha}
-                  onGuardar={async (d) => {
-                    const ok = await guardarTarea(d);
+                  hoy={hoy}
+                  onGuardar={async (dat) => {
+                    const ok = await guardarTarea(dat);
                     if (ok) setPanel(null);
                   }}
                 />
@@ -362,12 +339,12 @@ export default function App() {
 
 /* ---------- nueva tarea ---------- */
 
-function FormaTarea({ equipo, yo, fecha, onGuardar }) {
+function FormaTarea({ equipo, yo, hoy, onGuardar }) {
   const [titulo, setTitulo] = useState("");
   const [cliente, setCliente] = useState("");
   const [responsable, setResponsable] = useState(yo || "");
   const [hora, setHora] = useState("");
-  const [cuando, setCuando] = useState(fecha);
+  const [vence, setVence] = useState(hoy);
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -380,7 +357,7 @@ function FormaTarea({ equipo, yo, fecha, onGuardar }) {
       cliente: cliente.trim() || null,
       responsable: responsable || null,
       hora: hora || null,
-      fecha: cuando,
+      fecha: vence,
       estado: "pendiente",
       creada_por: yo || null,
     });
@@ -429,8 +406,8 @@ function FormaTarea({ equipo, yo, fecha, onGuardar }) {
 
       <div className="duo">
         <div className="campo">
-          <label htmlFor="f">Día de entrega</label>
-          <input id="f" type="date" value={cuando} onChange={(e) => setCuando(e.target.value)} />
+          <label htmlFor="f">Fecha de entrega</label>
+          <input id="f" type="date" value={vence} onChange={(e) => setVence(e.target.value)} />
         </div>
         <div className="campo">
           <label htmlFor="h">Hora</label>
@@ -452,7 +429,7 @@ function FormaTarea({ equipo, yo, fecha, onGuardar }) {
   );
 }
 
-/* ---------- detalle de una tarea ---------- */
+/* ---------- detalle ---------- */
 
 function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
   const [confirmar, setConfirmar] = useState(false);
@@ -463,7 +440,7 @@ function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
       <p className="detalle">
         {tarea.responsable || "Sin asignar"}
         {tarea.cliente && ` · ${tarea.cliente}`}
-        {tarea.hora && ` · entrega ${tarea.hora}`}
+        {tarea.hora && ` · ${tarea.hora}`}
       </p>
 
       <div className="campo">
@@ -482,7 +459,7 @@ function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
       </div>
 
       <div className="campo">
-        <label htmlFor="nf">Mover a otro día</label>
+        <label htmlFor="nf">Cambiar la fecha de entrega</label>
         <input
           id="nf"
           type="date"
