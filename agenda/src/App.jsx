@@ -196,15 +196,16 @@ export default function App() {
 
       <div className="dia">
         <h1>Pendientes</h1>
+      </div>
+      <p className="resumen">
         <span className="fecha">
           {DIAS[d.getDay()]} {d.getDate()} de {MESES[d.getMonth()]}
         </span>
-      </div>
-      <p className="resumen">
         {abiertas === 0 && entregadas === 0 ? (
-          "No hay nada cargado"
+          <> · nada cargado</>
         ) : (
           <>
+            {" · "}
             <b>{abiertas}</b> por entregar
             {atrasadas > 0 && <span className="vencidas"> · {atrasadas} atrasadas</span>}
             {entregadas > 0 && <> · {entregadas} entregadas hoy</>}
