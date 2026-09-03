@@ -71,15 +71,18 @@ export default function App() {
   const [error, setError] = useState("");
   const [panel, setPanel] = useState(null);
 
-  // Del día elegido se ve: todo lo pendiente hasta ese día (lo viejo se arrastra)
-  // más lo que se entregó ese mismo día. Lo entregado antes ya no aparece.
+  // Hoy y días pasados: se arrastra todo lo pendiente hasta esa fecha.
+  // Días futuros: solo lo agendado para ese día, para no repetir lo mismo en cada pantalla.
+  // En los dos casos se suma lo que se entregó ese mismo día, y nada más.
   const cargar = useCallback(async () => {
     if (!supabase) return;
+    const futuro = fecha > aISO(new Date());
+    const pendientes = `and(estado.eq.pendiente,fecha.${futuro ? "eq" : "lte"}.${fecha})`;
     const [t, e] = await Promise.all([
       supabase
         .from("tareas")
         .select("*")
-        .or(`and(estado.eq.pendiente,fecha.lte.${fecha}),entregada_en.eq.${fecha}`),
+        .or(`${pendientes},entregada_en.eq.${fecha}`),
       supabase.from("equipo").select("*").order("nombre"),
     ]);
     if (t.error || e.error) {
@@ -134,14 +137,25 @@ export default function App() {
 
   async function guardarTarea(datos) {
     const { error } = await supabase.from("tareas").insert(datos);
-    if (error) setError(error.message);
-    else cargar();
+    if (error) {
+      setError("No se pudo guardar: " + error.message);
+      return false;
+    }
+    setError("");
+    cargar();
+    return true;
   }
 
   async function cambiarTarea(id, cambios) {
+    const antes = tareas;
     setTareas((prev) => prev.map((t) => (t.id === id ? { ...t, ...cambios } : t)));
     const { error } = await supabase.from("tareas").update(cambios).eq("id", id);
-    if (error) setError(error.message);
+    if (error) {
+      setTareas(antes);
+      setError("No se pudo guardar el cambio: " + error.message);
+      return;
+    }
+    setError("");
     cargar();
   }
 
@@ -307,9 +321,9 @@ export default function App() {
                   equipo={equipo}
                   yo={yo}
                   fecha={fecha}
-                  onGuardar={(d) => {
-                    guardarTarea(d);
-                    setPanel(null);
+                  onGuardar={async (d) => {
+                    const ok = await guardarTarea(d);
+                    if (ok) setPanel(null);
                   }}
                 />
               )}
@@ -355,10 +369,13 @@ function FormaTarea({ equipo, yo, fecha, onGuardar }) {
   const [hora, setHora] = useState("");
   const [cuando, setCuando] = useState(fecha);
   const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
 
-  function enviar() {
+  async function enviar() {
+    if (guardando) return;
     if (!titulo.trim()) return setAviso("Ponele un nombre a la tarea.");
-    onGuardar({
+    setGuardando(true);
+    await onGuardar({
       titulo: titulo.trim(),
       cliente: cliente.trim() || null,
       responsable: responsable || null,
@@ -367,6 +384,7 @@ function FormaTarea({ equipo, yo, fecha, onGuardar }) {
       estado: "pendiente",
       creada_por: yo || null,
     });
+    setGuardando(false);
   }
 
   return (
@@ -420,8 +438,15 @@ function FormaTarea({ equipo, yo, fecha, onGuardar }) {
         </div>
       </div>
 
-      <button className="principal" onClick={enviar}>
-        Guardar tarea
+      <button
+        className="principal"
+        disabled={guardando}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          enviar();
+        }}
+      >
+        {guardando ? "Guardando…" : "Guardar tarea"}
       </button>
     </>
   );
