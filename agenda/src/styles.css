@@ -154,7 +154,6 @@ button {
 .filtros {
   display: flex;
   gap: 6px;
-  margin-left: auto;
 }
 
 .filtro {
