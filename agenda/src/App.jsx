@@ -264,6 +264,7 @@ export default function App() {
                         {t.hora}
                       </>
                     )}
+                    {t.descripcion && <span className="conDetalle">detalle</span>}
                     {tarde && <span className="etiqueta">{atraso(t.fecha, hoy)}</span>}
                   </span>
                 </button>
@@ -343,6 +344,7 @@ export default function App() {
 function FormaTarea({ equipo, yo, hoy, onGuardar }) {
   const [titulo, setTitulo] = useState("");
   const [cliente, setCliente] = useState("");
+  const [descripcion, setDescripcion] = useState("");
   const [responsable, setResponsable] = useState(yo || "");
   const [hora, setHora] = useState("");
   const [vence, setVence] = useState(hoy);
@@ -356,6 +358,7 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
     await onGuardar({
       titulo: titulo.trim(),
       cliente: cliente.trim() || null,
+      descripcion: descripcion.trim() || null,
       responsable: responsable || null,
       hora: hora || null,
       fecha: vence,
@@ -387,6 +390,17 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
       <div className="campo">
         <label htmlFor="c">Cliente o proyecto</label>
         <input id="c" value={cliente} onChange={(e) => setCliente(e.target.value)} placeholder="Opcional" />
+      </div>
+
+      <div className="campo">
+        <label htmlFor="dsc">Detalle del trabajo</label>
+        <textarea
+          id="dsc"
+          rows={4}
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          placeholder="Qué hay que hacer, formatos, referencias, lo que haga falta"
+        />
       </div>
 
       <div className="campo">
@@ -434,6 +448,8 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
 
 function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
   const [confirmar, setConfirmar] = useState(false);
+  const [texto, setTexto] = useState(tarea.descripcion || "");
+  const cambio = texto.trim() !== (tarea.descripcion || "");
 
   return (
     <>
@@ -445,6 +461,29 @@ function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
       </p>
 
       <div className="campo">
+        <label htmlFor="d2">Detalle del trabajo</label>
+        <textarea
+          id="d2"
+          rows={5}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Todavía no hay detalle. Escribilo acá."
+        />
+      </div>
+
+      {cambio && (
+        <button
+          className="principal"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            onCambiar({ descripcion: texto.trim() || null });
+          }}
+        >
+          Guardar el detalle
+        </button>
+      )}
+
+      <div className="campo" style={{ marginTop: 18 }}>
         <label>Pasarla a otra persona</label>
         <div className="gente">
           {equipo.map((p) => (

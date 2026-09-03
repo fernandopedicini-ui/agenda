@@ -478,6 +478,31 @@ button {
   margin-bottom: 6px;
 }
 
+.campo textarea {
+  width: 100%;
+  background: var(--blanco);
+  border: 1px solid var(--linea);
+  border-radius: 11px;
+  padding: 13px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.campo textarea:focus {
+  outline: 2px solid var(--tinta);
+  outline-offset: -1px;
+}
+
+.conDetalle {
+  font-size: 10.5px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--linea);
+  color: var(--suave);
+  background: var(--blanco);
+}
+
 .campo input {
   width: 100%;
   background: var(--blanco);
