@@ -294,6 +294,32 @@ button {
   color: var(--linea);
 }
 
+/* Horas: estimadas en la fila pendiente, "estimadas → reales" en la entregada. */
+
+.horas {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--linea);
+  background: var(--blanco);
+  color: var(--medio);
+  white-space: nowrap;
+}
+
+/* Se pasó de lo estimado: es lo único que queremos que salte a la vista. */
+.horas.pasado {
+  border-color: var(--tinta);
+  background: var(--tinta);
+  color: var(--blanco);
+}
+
+.horas.menos {
+  border-style: dashed;
+}
+
 .etiqueta {
   font-size: 10.5px;
   font-weight: 500;
@@ -526,6 +552,34 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+
+/* Atajos de horas debajo del input, para no tener que tipear. */
+.atajos {
+  margin-top: 8px;
+}
+
+.atajos .persona {
+  font-variant-numeric: tabular-nums;
+  padding: 8px 12px;
+}
+
+/* Resumen de estimado vs. real arriba del detalle. */
+.balance {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: -6px 0 18px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--linea);
+  background: var(--blanco);
+  color: var(--medio);
+}
+
+.balance.pasado {
+  border-color: var(--tinta);
+  color: var(--tinta);
+  font-weight: 500;
 }
 
 .persona {
