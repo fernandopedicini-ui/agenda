@@ -171,6 +171,130 @@ button {
   color: var(--blanco);
 }
 
+/* El acceso al resumen del mes, empujado al borde derecho. */
+.filtro.mes {
+  margin-left: auto;
+  border-style: dashed;
+}
+
+/* ---------- Horas del mes ---------- */
+
+.mesNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -6px 0 16px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--blanco);
+  border: 1px solid var(--linea);
+}
+
+.mesNav span {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.mesNav button {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--tinta);
+}
+
+.mesNav button:disabled {
+  color: var(--linea);
+}
+
+.granTotal {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 0 16px;
+  border-bottom: 1px solid var(--linea);
+  margin-bottom: 4px;
+}
+
+.granTotal strong {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.granTotal span {
+  font-size: 13px;
+  color: var(--suave);
+}
+
+.seccion {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--suave);
+  margin: 20px 0 10px;
+}
+
+.rank {
+  padding: 9px 0;
+}
+
+.rankTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rankNombre {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.rankHoras {
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.barra {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--linea);
+  margin: 7px 0 5px;
+  overflow: hidden;
+}
+
+.barra span {
+  display: block;
+  height: 100%;
+  background: var(--tinta);
+  border-radius: 3px;
+}
+
+.rankPie {
+  font-size: 12px;
+  color: var(--suave);
+}
+
+.ojo {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--medio);
+  margin-top: 20px;
+  padding: 12px 13px;
+  border-radius: 11px;
+  border: 1px dashed var(--linea);
+  background: var(--blanco);
+}
+
 /* ---------- Lista ---------- */
 
 .lista {
