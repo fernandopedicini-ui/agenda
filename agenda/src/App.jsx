@@ -47,6 +47,35 @@ function atraso(iso, hoy) {
   return `${dif} días de atraso`;
 }
 
+/* ---------- horas ---------- */
+
+const ATAJOS_HORAS = [1, 2, 4, 6, 8, 16];
+
+// Un número de horas listo para mostrar: 4 → "4h", 1.5 → "1,5h".
+function fmtH(n) {
+  const v = Number(n);
+  if (n === null || n === undefined || n === "" || !Number.isFinite(v)) return null;
+  return `${Number.isInteger(v) ? v : String(v).replace(".", ",")}h`;
+}
+
+// Lo que escribe la gente ("2,5") a número, o null si no cargó nada.
+function aHoras(texto) {
+  const limpio = String(texto ?? "").replace(",", ".").trim();
+  if (!limpio) return null;
+  const v = Number(limpio);
+  return Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+// Cuánto se desvió lo real de lo estimado. Sin estimación no hay desvío.
+function desvio(est, real) {
+  const e = aHoras(est);
+  const r = aHoras(real);
+  if (e === null || r === null || e <= 0) return "";
+  if (r > e * 1.15) return "pasado";
+  if (r < e * 0.85) return "menos";
+  return "clavado";
+}
+
 /* ---------- app ---------- */
 
 export default function App() {
@@ -120,6 +149,12 @@ export default function App() {
   const entregadas = visibles.filter((t) => t.estado === "lista").length;
   const atrasadas = visibles.filter((t) => t.estado !== "lista" && t.fecha < hoy).length;
 
+  // Horas estimadas que quedan por delante, para saber si la semana entra o no.
+  const horasAbiertas = visibles.reduce(
+    (suma, t) => (t.estado !== "lista" ? suma + (Number(t.horas_estimadas) || 0) : suma),
+    0
+  );
+
   async function guardarTarea(datos) {
     const { error } = await supabase.from("tareas").insert(datos);
     if (error) {
@@ -144,12 +179,23 @@ export default function App() {
     cargar();
   }
 
+  // Al entregar preguntamos las horas reales; al reabrir las borramos,
+  // así el dato siempre corresponde a la entrega que quedó firme.
   function tildar(t) {
-    const hecha = t.estado === "lista";
+    if (t.estado === "lista") {
+      cambiarTarea(t.id, { estado: "pendiente", entregada_en: null, horas_reales: null });
+      return;
+    }
+    setPanel({ tipo: "cerrar", tarea: t });
+  }
+
+  function cerrarTarea(t, horas) {
     cambiarTarea(t.id, {
-      estado: hecha ? "pendiente" : "lista",
-      entregada_en: hecha ? null : aISO(new Date()),
+      estado: "lista",
+      entregada_en: aISO(new Date()),
+      horas_reales: horas,
     });
+    setPanel(null);
   }
 
   async function borrarTarea(id) {
@@ -207,6 +253,7 @@ export default function App() {
           <>
             {" · "}
             <b>{abiertas}</b> por entregar
+            {horasAbiertas > 0 && <> · <b>{fmtH(horasAbiertas)}</b> estimadas</>}
             {atrasadas > 0 && <span className="vencidas"> · {atrasadas} atrasadas</span>}
             {entregadas > 0 && <> · {entregadas} entregadas hoy</>}
           </>
@@ -264,6 +311,7 @@ export default function App() {
                         {t.hora}
                       </>
                     )}
+                    <Horas tarea={t} hecha={hecha} />
                     {t.descripcion && <span className="conDetalle">detalle</span>}
                     {tarde && <span className="etiqueta">{atraso(t.fecha, hoy)}</span>}
                   </span>
@@ -320,6 +368,9 @@ export default function App() {
                   }}
                 />
               )}
+              {panel.tipo === "cerrar" && (
+                <PanelCierre tarea={panel.tarea} onCerrar={(h) => cerrarTarea(panel.tarea, h)} />
+              )}
               {panel.tipo === "equipo" && (
                 <PanelEquipo
                   equipo={equipo}
@@ -339,6 +390,94 @@ export default function App() {
   );
 }
 
+/* ---------- horas en la fila ---------- */
+
+function Horas({ tarea, hecha }) {
+  const est = fmtH(tarea.horas_estimadas);
+  const real = fmtH(tarea.horas_reales);
+
+  if (hecha && real) {
+    const d = desvio(tarea.horas_estimadas, tarea.horas_reales);
+    return (
+      <span className={`horas ${d}`}>{est ? `${est} → ${real}` : real}</span>
+    );
+  }
+  if (est) return <span className="horas">{est}</span>;
+  return null;
+}
+
+/* ---------- campo de horas, reusable ---------- */
+
+function CampoHoras({ id, etiqueta, valor, onCambio, placeholder }) {
+  return (
+    <div className="campo">
+      <label htmlFor={id}>{etiqueta}</label>
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        value={valor}
+        onChange={(e) => onCambio(e.target.value.replace(/[^0-9.,]/g, ""))}
+        placeholder={placeholder}
+      />
+      <div className="gente atajos">
+        {ATAJOS_HORAS.map((n) => (
+          <button
+            key={n}
+            className={`persona ${aHoras(valor) === n ? "elegida" : ""}`}
+            onClick={() => onCambio(aHoras(valor) === n ? "" : String(n).replace(".", ","))}
+          >
+            {fmtH(n)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- cerrar tarea: cuántas horas llevó ---------- */
+
+function PanelCierre({ tarea, onCerrar }) {
+  const [reales, setReales] = useState(
+    tarea.horas_reales != null ? String(tarea.horas_reales).replace(".", ",") : ""
+  );
+  const est = fmtH(tarea.horas_estimadas);
+  const cargadas = aHoras(reales);
+
+  return (
+    <>
+      <h2>{tarea.titulo}</h2>
+      <p className="detalle">
+        {est ? `Estimaste ${est}. ¿Cuántas te llevó de verdad?` : "¿Cuántas horas te llevó?"}
+      </p>
+
+      <CampoHoras
+        id="hr"
+        etiqueta="Horas reales"
+        valor={reales}
+        onCambio={setReales}
+        placeholder="ej. 3,5"
+      />
+
+      <button
+        className="principal"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          onCerrar(cargadas);
+        }}
+      >
+        {cargadas != null ? `Entregada · ${fmtH(cargadas)}` : "Entregada"}
+      </button>
+
+      {cargadas == null && (
+        <p className="detalle" style={{ margin: "10px 0 0", textAlign: "center" }}>
+          Podés entregarla sin cargar las horas y ponerlas después.
+        </p>
+      )}
+    </>
+  );
+}
+
 /* ---------- nueva tarea ---------- */
 
 function FormaTarea({ equipo, yo, hoy, onGuardar }) {
@@ -347,6 +486,7 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
   const [descripcion, setDescripcion] = useState("");
   const [responsable, setResponsable] = useState(yo || "");
   const [hora, setHora] = useState("");
+  const [estimadas, setEstimadas] = useState("");
   const [vence, setVence] = useState(hoy);
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -361,6 +501,7 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
       descripcion: descripcion.trim() || null,
       responsable: responsable || null,
       hora: hora || null,
+      horas_estimadas: aHoras(estimadas),
       fecha: vence,
       estado: "pendiente",
       creada_por: yo || null,
@@ -430,6 +571,14 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
         </div>
       </div>
 
+      <CampoHoras
+        id="he"
+        etiqueta="Horas estimadas"
+        valor={estimadas}
+        onCambio={setEstimadas}
+        placeholder="Opcional — ej. 4"
+      />
+
       <button
         className="principal"
         disabled={guardando}
@@ -449,7 +598,22 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
 function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
   const [confirmar, setConfirmar] = useState(false);
   const [texto, setTexto] = useState(tarea.descripcion || "");
-  const cambio = texto.trim() !== (tarea.descripcion || "");
+  const [estimadas, setEstimadas] = useState(
+    tarea.horas_estimadas != null ? String(tarea.horas_estimadas).replace(".", ",") : ""
+  );
+  const [reales, setReales] = useState(
+    tarea.horas_reales != null ? String(tarea.horas_reales).replace(".", ",") : ""
+  );
+  const hecha = tarea.estado === "lista";
+
+  const cambios = {};
+  if (texto.trim() !== (tarea.descripcion || "")) cambios.descripcion = texto.trim() || null;
+  // aHoras() normaliza los dos lados: la base puede devolver el numeric como texto.
+  if (aHoras(estimadas) !== aHoras(tarea.horas_estimadas)) cambios.horas_estimadas = aHoras(estimadas);
+  if (aHoras(reales) !== aHoras(tarea.horas_reales)) cambios.horas_reales = aHoras(reales);
+  const hayCambios = Object.keys(cambios).length > 0;
+
+  const d = desvio(tarea.horas_estimadas, tarea.horas_reales);
 
   return (
     <>
@@ -459,6 +623,14 @@ function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
         {tarea.cliente && ` · ${tarea.cliente}`}
         {tarea.hora && ` · ${tarea.hora}`}
       </p>
+
+      {d && (
+        <p className={`balance ${d}`}>
+          {d === "pasado" && `Se pasó: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
+          {d === "menos" && `Salió más rápido: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
+          {d === "clavado" && `Clavada: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
+        </p>
+      )}
 
       <div className="campo">
         <label htmlFor="d2">Detalle del trabajo</label>
@@ -471,15 +643,33 @@ function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
         />
       </div>
 
-      {cambio && (
+      <CampoHoras
+        id="he2"
+        etiqueta="Horas estimadas"
+        valor={estimadas}
+        onCambio={setEstimadas}
+        placeholder="Sin estimar"
+      />
+
+      {(hecha || aHoras(reales) != null) && (
+        <CampoHoras
+          id="hr2"
+          etiqueta="Horas reales"
+          valor={reales}
+          onCambio={setReales}
+          placeholder="Sin cargar"
+        />
+      )}
+
+      {hayCambios && (
         <button
           className="principal"
           onPointerDown={(e) => {
             e.preventDefault();
-            onCambiar({ descripcion: texto.trim() || null });
+            onCambiar(cambios);
           }}
         >
-          Guardar el detalle
+          Guardar los cambios
         </button>
       )}
 
