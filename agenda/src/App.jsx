@@ -638,8 +638,13 @@ function PanelMes({ hoy }) {
 
           {resumen.sinHoras > 0 && (
             <p className="ojo">
-              {resumen.sinHoras} de las {resumen.entregadas} tareas se entregaron sin cargar las
-              horas, así que el total real es más alto que este.
+              {resumen.sinHoras === resumen.entregadas
+                ? resumen.entregadas === 1
+                  ? "La única tarea entregada este mes se cerró sin cargar las horas."
+                  : `Ninguna de las ${resumen.entregadas} tareas entregadas tiene horas cargadas.`
+                : `${resumen.sinHoras} ${
+                    resumen.sinHoras === 1 ? "tarea se entregó" : "tareas se entregaron"
+                  } sin cargar las horas, así que el total real es más alto que este.`}
             </p>
           )}
         </>
