@@ -284,6 +284,18 @@ button {
   color: var(--suave);
 }
 
+/* Campos de solo lectura, para las tareas que no cargaste vos. */
+.lectura {
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  padding: 13px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--linea);
+  background: var(--blanco);
+  color: var(--medio);
+}
+
 .ojo {
   font-size: 13px;
   line-height: 1.5;
@@ -471,6 +483,13 @@ button {
 
 .tildar:active {
   border-color: var(--tinta);
+}
+
+/* Tarea de otro: el círculo se ve, pero avisa que no es tuyo. */
+.tildar.ajena {
+  border-style: dashed;
+  border-color: var(--linea);
+  background: transparent;
 }
 
 .tildar.hecha {
