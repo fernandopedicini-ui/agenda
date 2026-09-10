@@ -122,8 +122,16 @@ Queda con ícono propio y abre en ventana completa, sin barra de navegador.
 
 Listo. Cargar una tarea son cuatro toques: nombre, quién la tiene, hora, guardar.
 
-Para dar algo por entregado, el círculo de la derecha. Lo toca la persona que tiene la tarea,
-no vos: así la agenda se mantiene sola y ves el estado sin preguntar.
+Para dar algo por entregado, el círculo de la derecha.
+
+**Cada tarea es de quien la cargó.** Todos ven todo, pero tachar, editar, reasignar o borrar
+una tarea solo lo puede hacer la persona que la cargó. Al resto el círculo le aparece punteado
+y, si lo tocan, la app les avisa de quién es. Las tareas cargadas antes de esta versión no
+tienen autor guardado, así que esas las puede tocar cualquiera.
+
+Ojo con esto: si vos cargás las tareas de todo el equipo, vas a ser vos quien tenga que
+tacharlas cuando te avisen que están listas. Si preferís que las tache quien las hace, lo
+mejor es que cada uno cargue las suyas.
 
 Cómo se comporta la lista:
 
