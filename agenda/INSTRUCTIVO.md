@@ -20,6 +20,8 @@ create table tareas (
   responsable text,
   fecha date not null,
   hora text,
+  horas_estimadas numeric,
+  horas_reales numeric,
   estado text not null default 'pendiente',
   entregada_en date,
   creada_por text,
@@ -44,7 +46,12 @@ alter publication supabase_realtime add table equipo;
 Tiene que decir **Success. No rows returned**.
 
 > Si ya habías corrido este bloque antes de esta versión, corré además:
-> `alter table tareas add column if not exists entregada_en date;`
+>
+> ```sql
+> alter table tareas add column if not exists entregada_en date;
+> alter table tareas add column if not exists horas_estimadas numeric;
+> alter table tareas add column if not exists horas_reales numeric;
+> ```
 
 4. Ahora los datos de conexión. Son dos, y están en dos pantallas distintas dentro de
    **Project Settings**:
@@ -95,9 +102,14 @@ Si te olvidaste de cargar las variables, la app te lo avisa en pantalla. Las car
 Mandale el link a los diez por WhatsApp.
 
 - **Android:** abrir el link en **Chrome** → tres puntos → **Instalar app**.
-- **iPhone:** abrir el link en **Safari** → botón compartir → **Agregar a inicio**.
+- **iPhone:** abrir el link en **Safari** (en Chrome no aparece la opción) → botón
+  compartir → deslizar la lista **bastante hacia arriba** → **Agregar a inicio**.
 
 Queda con ícono propio y abre en ventana completa, sin barra de navegador.
+
+> En iPhone la lista del botón compartir es larga y "Agregar a inicio" queda abajo de
+> todo. Si directamente no aparece: al final de esa misma lista está **Editar acciones**;
+> ahí se busca "Agregar a inicio" y se toca el **+** verde para sumarlo.
 
 ---
 
@@ -121,6 +133,34 @@ Cómo se comporta la lista:
 - Si te equivocaste y tildaste algo, tocás de nuevo y vuelve a pendiente.
 
 O sea que la lista nunca crece: siempre muestra lo que falta, no el historial.
+
+---
+
+## 6. Las horas
+
+Sirve para saber cuánto sale de verdad cada cosa, no para controlar a nadie. Son dos datos.
+
+**Al cargar la tarea:** el campo **Horas estimadas**. Se puede tipear (`2,5`) o tocar uno de
+los atajos (1h, 2h, 4h, 6h, 8h, 16h). Es opcional: si no lo cargás, la tarea funciona igual.
+
+**Al entregar:** cuando la persona toca el círculo, en vez de tacharse directo se abre un
+cuadrito que pregunta **cuántas horas le llevó**. Le recuerda lo que se había estimado.
+También puede tocar "Entregada" sin cargar nada y ponerlo después desde el detalle.
+
+**Cómo se lee en la lista:**
+
+| Se ve | Quiere decir |
+|---|---|
+| `4h` | Está pendiente y se estimaron 4 horas. |
+| `8h → 11h` en negro | Entregada, se pasó más de un 15% de lo estimado. |
+| `6h → 4h` con borde punteado | Entregada, salió más rápido de lo estimado. |
+| `8h → 9h` con borde fino | Entregada, clavada dentro de lo estimado. |
+
+Arriba, al lado de "3 por entregar", aparece el total de horas estimadas que quedan por
+delante. Es el número para saber si la semana entra o no.
+
+Si tildaste algo por error y lo volvés a pendiente, las horas reales se borran: así el dato
+siempre corresponde a la entrega que quedó firme. Las estimadas no se tocan.
 
 ---
 
