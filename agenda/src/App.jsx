@@ -76,6 +76,48 @@ function desvio(est, real) {
   return "clavado";
 }
 
+/* ---------- meses ---------- */
+
+function mesDe(iso) {
+  return iso.slice(0, 7);
+}
+
+// Primer y último día del mes, en ISO, para pedirle el rango a la base.
+function rangoMes(ym) {
+  const [a, m] = ym.split("-").map(Number);
+  const mm = String(m).padStart(2, "0");
+  const ultimo = new Date(a, m, 0).getDate();
+  return { desde: `${a}-${mm}-01`, hasta: `${a}-${mm}-${ultimo}` };
+}
+
+function correrMes(ym, cuantos) {
+  const [a, m] = ym.split("-").map(Number);
+  const d = new Date(a, m - 1 + cuantos, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function nombreMes(ym) {
+  const [a, m] = ym.split("-").map(Number);
+  return `${MESES[m - 1]} ${a}`;
+}
+
+// Junta las tareas del mes por cliente o por responsable.
+function agrupar(tareas, clave, sinNombre) {
+  const mapa = new Map();
+  for (const t of tareas) {
+    const k = (t[clave] || "").trim() || sinNombre;
+    const fila = mapa.get(k) || { nombre: k, horas: 0, estimadas: 0, tareas: 0, sinHoras: 0 };
+    const reales = aHoras(t.horas_reales);
+    const est = aHoras(t.horas_estimadas);
+    fila.tareas += 1;
+    if (reales === null) fila.sinHoras += 1;
+    else fila.horas += reales;
+    if (est !== null) fila.estimadas += est;
+    mapa.set(k, fila);
+  }
+  return [...mapa.values()].sort((a, b) => b.horas - a.horas || b.tareas - a.tareas);
+}
+
 /* ---------- app ---------- */
 
 export default function App() {
@@ -275,6 +317,9 @@ export default function App() {
             Lo mío
           </button>
         </div>
+        <button className="filtro mes" onClick={() => setPanel({ tipo: "mes" })}>
+          Horas del mes
+        </button>
       </div>
 
       {error && <p className="aviso">{error}</p>}
@@ -371,6 +416,7 @@ export default function App() {
               {panel.tipo === "cerrar" && (
                 <PanelCierre tarea={panel.tarea} onCerrar={(h) => cerrarTarea(panel.tarea, h)} />
               )}
+              {panel.tipo === "mes" && <PanelMes hoy={hoy} />}
               {panel.tipo === "equipo" && (
                 <PanelEquipo
                   equipo={equipo}
@@ -473,6 +519,130 @@ function PanelCierre({ tarea, onCerrar }) {
         <p className="detalle" style={{ margin: "10px 0 0", textAlign: "center" }}>
           Podés entregarla sin cargar las horas y ponerlas después.
         </p>
+      )}
+    </>
+  );
+}
+
+/* ---------- horas del mes ---------- */
+
+function Ranking({ filas, tope }) {
+  if (filas.length === 0) return <p className="detalle">Nada entregado este mes.</p>;
+  return (
+    <div className="ranking">
+      {filas.map((f) => (
+        <div className="rank" key={f.nombre}>
+          <div className="rankTop">
+            <span className="rankNombre">{f.nombre}</span>
+            <span className="rankHoras">{f.horas > 0 ? fmtH(f.horas) : "—"}</span>
+          </div>
+          <div className="barra">
+            <span style={{ width: `${tope > 0 ? Math.round((f.horas / tope) * 100) : 0}%` }} />
+          </div>
+          <span className="rankPie">
+            {f.tareas} {f.tareas === 1 ? "tarea" : "tareas"}
+            {f.estimadas > 0 && ` · ${fmtH(f.estimadas)} estimadas`}
+            {f.sinHoras > 0 && ` · ${f.sinHoras} sin horas`}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PanelMes({ hoy }) {
+  const mesActual = mesDe(hoy);
+  const [mes, setMes] = useState(mesActual);
+  const [tareas, setTareas] = useState(null);
+  const [error, setError] = useState("");
+
+  // Traemos solo lo entregado dentro del mes elegido. El historial vive en la
+  // base aunque la lista del día ya no lo muestre.
+  useEffect(() => {
+    let vigente = true;
+    setTareas(null);
+    const { desde, hasta } = rangoMes(mes);
+    supabase
+      .from("tareas")
+      .select("*")
+      .eq("estado", "lista")
+      .gte("entregada_en", desde)
+      .lte("entregada_en", hasta)
+      .then(({ data, error }) => {
+        if (!vigente) return;
+        if (error) {
+          setError(error.message);
+          setTareas([]);
+          return;
+        }
+        setError("");
+        setTareas(data || []);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [mes]);
+
+  const resumen = useMemo(() => {
+    if (!tareas) return null;
+    const porCliente = agrupar(tareas, "cliente", "Sin cliente");
+    const porPersona = agrupar(tareas, "responsable", "Sin asignar");
+    const totalReal = tareas.reduce((s, t) => s + (aHoras(t.horas_reales) || 0), 0);
+    const totalEst = tareas.reduce((s, t) => s + (aHoras(t.horas_estimadas) || 0), 0);
+    const sinHoras = tareas.filter((t) => aHoras(t.horas_reales) === null).length;
+    return { porCliente, porPersona, totalReal, totalEst, sinHoras, entregadas: tareas.length };
+  }, [tareas]);
+
+  return (
+    <>
+      <h2>Horas del mes</h2>
+
+      <div className="mesNav">
+        <button onClick={() => setMes(correrMes(mes, -1))} aria-label="Mes anterior">
+          ‹
+        </button>
+        <span>{nombreMes(mes)}</span>
+        <button
+          onClick={() => setMes(correrMes(mes, 1))}
+          disabled={mes >= mesActual}
+          aria-label="Mes siguiente"
+        >
+          ›
+        </button>
+      </div>
+
+      {error && <p className="aviso">{error}</p>}
+
+      {!resumen ? (
+        <p className="detalle">Buscando…</p>
+      ) : resumen.entregadas === 0 ? (
+        <div className="vacio">
+          <strong>Sin entregas</strong>
+          No hay nada entregado en {nombreMes(mes)}.
+        </div>
+      ) : (
+        <>
+          <div className="granTotal">
+            <strong>{resumen.totalReal > 0 ? fmtH(resumen.totalReal) : "sin horas cargadas"}</strong>
+            <span>
+              en {resumen.entregadas} {resumen.entregadas === 1 ? "tarea entregada" : "tareas entregadas"}
+              {resumen.totalEst > 0 && ` · ${fmtH(resumen.totalEst)} estimadas`}
+            </span>
+          </div>
+
+          <h3 className="seccion">Por cliente</h3>
+          <Ranking filas={resumen.porCliente} tope={resumen.porCliente[0]?.horas || 0} />
+
+          <h3 className="seccion">Por persona</h3>
+          <Ranking filas={resumen.porPersona} tope={resumen.porPersona[0]?.horas || 0} />
+
+          {resumen.sinHoras > 0 && (
+            <p className="ojo">
+              {resumen.sinHoras} de las {resumen.entregadas} tareas se entregaron sin cargar las
+              horas, así que el total real es más alto que este.
+            </p>
+          )}
+        </>
       )}
     </>
   );
