@@ -162,6 +162,12 @@ delante. Es el número para saber si la semana entra o no.
 Si tildaste algo por error y lo volvés a pendiente, las horas reales se borran: así el dato
 siempre corresponde a la entrega que quedó firme. Las estimadas no se tocan.
 
+**El resumen del mes:** arriba, al lado de los filtros, el botón **Horas del mes**. Muestra el
+total del mes elegido, el ranking de clientes y el de personas, y avisa cuántas tareas se
+entregaron sin horas cargadas, para que sepas si el número es confiable. Con las flechitas se
+va a los meses anteriores: el historial completo sigue en la base aunque la lista del día ya
+no lo muestre.
+
 ---
 
 ## Lo que conviene saber
