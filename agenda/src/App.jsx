@@ -76,16 +76,6 @@ function desvio(est, real) {
   return "clavado";
 }
 
-/* ---------- permisos ---------- */
-
-// Cada tarea es de quien la cargó: solo esa persona la tacha, la edita o la borra.
-// Las tareas viejas, cargadas antes de que se guardara el autor, quedan abiertas
-// para todos; si no, no habría manera de cerrarlas nunca.
-function esMia(tarea, yo) {
-  if (!tarea.creada_por) return true;
-  return tarea.creada_por === yo;
-}
-
 /* ---------- meses ---------- */
 
 function mesDe(iso) {
@@ -234,14 +224,6 @@ export default function App() {
   // Al entregar preguntamos las horas reales; al reabrir las borramos,
   // así el dato siempre corresponde a la entrega que quedó firme.
   function tildar(t) {
-    if (!yo) {
-      setPanel({ tipo: "equipo" });
-      return;
-    }
-    if (!esMia(t, yo)) {
-      setError(`"${t.titulo}" la cargó ${t.creada_por}. Solo esa persona puede tacharla.`);
-      return;
-    }
     if (t.estado === "lista") {
       cambiarTarea(t.id, { estado: "pendiente", entregada_en: null, horas_reales: null });
       return;
@@ -352,7 +334,6 @@ export default function App() {
           {visibles.map((t) => {
             const hecha = t.estado === "lista";
             const tarde = !hecha && t.fecha < hoy;
-            const ajena = !esMia(t, yo);
             return (
               <div key={t.id} className={`fila ${hecha ? "hecha" : ""}`}>
                 <span className={`punto ${tarde ? "tarde" : hecha ? "lista" : "pendiente"}`} />
@@ -381,14 +362,8 @@ export default function App() {
                   </span>
                 </button>
                 <button
-                  className={`tildar ${hecha ? "hecha" : ""} ${ajena ? "ajena" : ""}`}
-                  aria-label={
-                    ajena
-                      ? `La cargó ${t.creada_por}, solo esa persona puede tacharla`
-                      : hecha
-                      ? "Volver a pendiente"
-                      : "Marcar como entregada"
-                  }
+                  className={`tildar ${hecha ? "hecha" : ""}`}
+                  aria-label={hecha ? "Volver a pendiente" : "Marcar como entregada"}
                   onClick={() => tildar(t)}
                 >
                   ✓
@@ -401,10 +376,7 @@ export default function App() {
 
       <div className="pie">
         <div className="adentro">
-          <button
-            className="principal"
-            onClick={() => setPanel({ tipo: yo ? "nueva" : "equipo" })}
-          >
+          <button className="principal" onClick={() => setPanel({ tipo: "nueva" })}>
             Nueva tarea
           </button>
         </div>
@@ -431,7 +403,6 @@ export default function App() {
                 <DetalleTarea
                   tarea={panel.tarea}
                   equipo={equipo}
-                  yo={yo}
                   onCambiar={(c) => {
                     cambiarTarea(panel.tarea.id, c);
                     setPanel(null);
@@ -799,66 +770,7 @@ function FormaTarea({ equipo, yo, hoy, onGuardar }) {
 
 /* ---------- detalle ---------- */
 
-// Cabecera común: quién la tiene y cómo le fue con las horas.
-function CabezaTarea({ tarea }) {
-  const d = desvio(tarea.horas_estimadas, tarea.horas_reales);
-  return (
-    <>
-      <h2>{tarea.titulo}</h2>
-      <p className="detalle">
-        {tarea.responsable || "Sin asignar"}
-        {tarea.cliente && ` · ${tarea.cliente}`}
-        {tarea.hora && ` · ${tarea.hora}`}
-      </p>
-
-      {d && (
-        <p className={`balance ${d}`}>
-          {d === "pasado" && `Se pasó: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
-          {d === "menos" && `Salió más rápido: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
-          {d === "clavado" && `Clavada: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
-        </p>
-      )}
-    </>
-  );
-}
-
-// Lo que ve alguien que no cargó la tarea: todo, pero sin poder tocar nada.
-function DetalleAjeno({ tarea }) {
-  const est = fmtH(tarea.horas_estimadas);
-  const real = fmtH(tarea.horas_reales);
-  return (
-    <>
-      <CabezaTarea tarea={tarea} />
-
-      <div className="campo">
-        <label>Detalle del trabajo</label>
-        <p className="lectura">{tarea.descripcion || "Sin detalle cargado."}</p>
-      </div>
-
-      {(est || real) && (
-        <div className="campo">
-          <label>Horas</label>
-          <p className="lectura">
-            {est ? `${est} estimadas` : "Sin estimar"}
-            {real && ` · ${real} reales`}
-          </p>
-        </div>
-      )}
-
-      <p className="ojo">
-        Esta tarea la cargó <b>{tarea.creada_por}</b>. Solo esa persona puede editarla, pasarla
-        a otro o darla por entregada.
-      </p>
-    </>
-  );
-}
-
-function DetalleTarea({ tarea, equipo, yo, onCambiar, onBorrar }) {
-  if (!esMia(tarea, yo)) return <DetalleAjeno tarea={tarea} />;
-  return <DetalleMia tarea={tarea} equipo={equipo} onCambiar={onCambiar} onBorrar={onBorrar} />;
-}
-
-function DetalleMia({ tarea, equipo, onCambiar, onBorrar }) {
+function DetalleTarea({ tarea, equipo, onCambiar, onBorrar }) {
   const [confirmar, setConfirmar] = useState(false);
   const [texto, setTexto] = useState(tarea.descripcion || "");
   const [estimadas, setEstimadas] = useState(
@@ -876,9 +788,24 @@ function DetalleMia({ tarea, equipo, onCambiar, onBorrar }) {
   if (aHoras(reales) !== aHoras(tarea.horas_reales)) cambios.horas_reales = aHoras(reales);
   const hayCambios = Object.keys(cambios).length > 0;
 
+  const d = desvio(tarea.horas_estimadas, tarea.horas_reales);
+
   return (
     <>
-      <CabezaTarea tarea={tarea} />
+      <h2>{tarea.titulo}</h2>
+      <p className="detalle">
+        {tarea.responsable || "Sin asignar"}
+        {tarea.cliente && ` · ${tarea.cliente}`}
+        {tarea.hora && ` · ${tarea.hora}`}
+      </p>
+
+      {d && (
+        <p className={`balance ${d}`}>
+          {d === "pasado" && `Se pasó: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
+          {d === "menos" && `Salió más rápido: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
+          {d === "clavado" && `Clavada: ${fmtH(tarea.horas_estimadas)} estimadas, ${fmtH(tarea.horas_reales)} reales.`}
+        </p>
+      )}
 
       <div className="campo">
         <label htmlFor="d2">Detalle del trabajo</label>
